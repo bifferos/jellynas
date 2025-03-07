@@ -7,4 +7,4 @@ On Mac I install it [via homebrew](https://formulae.brew.sh/formula/zim)
 On Windows it's available [via chocolatey](https://community.chocolatey.org/packages/zim)
 (I've never tried this).
 
-Of course, you can just follow the instructions on the Zim homepage if you prefer.
+You can just follow the instructions on the Zim homepage if you prefer.
