@@ -1,0 +1,112 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.6
+Creation-Date: 2025-03-03T02:00:20+00:00
+
+====== 04 Waking Up ======
+Created Monday 03 March 2025
+
+==== On NAS: ====
+Go to Network Connections
+
+{{./pasted_image006.png}}
+
+{{./pasted_image007.png}}
+
+Select WOL.
+
+{{./pasted_image008.png}}
+
+Does the 'ethtool' stuff.
+
+Note the MAC address:
+
+{{./pasted_image010.png}}
+
+
+
+
+
+
+==== On Jellyfin server: ====
+
+{{./pasted_image004.png}}
+
+{{./pasted_image005.png}}
+
+
+Find the location of the log files:
+
+root@jm-Standard-PC-i440FX-PIIX-1996:**/var/log/jellyfin**# ls -l *.log
+-rw-r--r-- 1 jellyfin jellyfin  48689 Mar  1 10:55 FFmpeg.DirectStream-2025-03-01_10-55-24_3c18006b17a5f27264ff725c8a514714_0cf6f68d.log
+-rw-r--r-- 1 jellyfin jellyfin 152553 Mar  1 14:52 FFmpeg.Transcode-2025-03-01_14-47-56_a58b3bfb6c844df90c38501e1fd733ae_3676c17b.log
+-rw-r--r-- 1 jellyfin jellyfin  13079 Feb 27 23:25 jellyfin20250227.log
+-rw-r--r-- 1 jellyfin jellyfin 212751 Feb 28 20:30 jellyfin20250228.log
+-rw-r--r-- 1 jellyfin jellyfin 268697 Mar  1 20:01 jellyfin20250301.log
+
+find / -iname jellyfin\*.log
+
+
+There may be background processes generated logs, no use if you're sleeping right next to the NAS and you want it to stay off.
+{{./pasted_image009.png}}
+
+inotifywait 
+
+root@jm-Standard-PC-i440FX-PIIX-1996:~# **inotifywait /var/log/jellyfin -e create -e modify**
+Setting up watches.
+Watches established.
+
+
+
+**jellywake.sh**
+
+''!/bin/sh''
+
+''inotifywait /var/log/jellyfin -e create -e modify''
+''if [ $? -eq 0 ]; then''
+  ''for i in 1 2; do''
+	''wakeonlan a8:a1:59:2b:6a:9d''
+	''sleep 5''
+  ''done''
+  ''sleep 30     # Less than the autosuspend idle interval''
+''else''
+  ''echo "Error running inotifywait, is it installed?"''
+  ''break''
+''fi''
+
+
+**jellywake.service  (systemctl config file)**
+
+[Unit]
+Description=NAS Wakeup script
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/jellywake.sh
+StandardOutput=journal
+StandardError=journal
+Restart=on-success
+User=jellyfin
+Group=jellyfin
+
+[Install]
+WantedBy=multi-user.target
+
+
+**install.sh**
+
+#!/bin/sh
+
+sudo cp jellywake.sh /usr/local/bin/jellywake.sh
+sudo cp jellywake.service /etc/systemd/system/jellywake.service
+sudo systemctl daemon-reload
+sudo systemctl enable jellywake
+sudo systemctl start jellywake
+
+
+
+
+
+
+
+
+

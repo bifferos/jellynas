@@ -1,0 +1,72 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.6
+Creation-Date: 2025-03-02T12:46:16+00:00
+
+====== 01 Intro ======
+Created Sunday 02 March 2025
+
+===== Existing Setup =====
+
+
+{{./pasted_image002.tiff}}
+
+
+
+
+
+
+
+
+===== But my Synology is out of storage! =====
+
+2x 4TB Seagate NAS Disks
+Do I upgrade the disks?
+Do I upgrade the unit and add more disks?
+
+
+===== What about JBOD in an old PC? =====
+
+"Just a Bunch Of Disks"
+Ryzen 1700, 16GB RAM, ASRock 450 M/b and a Fractal Design R4 case   <--- overkill, just use what you've got.
+* Toshiba 3TB x2
+* WDC 2TB
+* WDC 3TB
+* Hitachi 2TB
+
+13TB in total.  More than enough for media.
+
+
+{{./pasted_image.tiff?width=300}}
+
+
+
+===== Proposed Setup =====
+
+
+{{./pasted_image003.tiff}}
+
+
+
+===== Issues =====
+
+* 5 drives needs additional SATA card.  Most m/boards have only 4 SATA ports, e.g. ASRock 450 (4xSATA connections)
+* Needs to power up only in use due to 65w
+* Needs to power down when not in use
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

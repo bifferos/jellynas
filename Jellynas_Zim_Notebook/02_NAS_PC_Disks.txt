@@ -1,0 +1,82 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.6
+Creation-Date: 2025-03-02T12:53:21+00:00
+
+====== 02 NAS PC Disks ======
+Created Sunday 02 March 2025
+
+===== Install Linux Mint =====
+
+It's easy, runs on almost anything (4GB RAM+), I'm familiar with it, no need for 'NAS' OS.  **Linux is Linux!**
+
+===== Prepare the disks =====
+
+{{./pasted_image001.png}}
+
+{{./pasted_image002.png}}
+
+
+Optional:  Add a fan if needed!
+
+{{./pasted_image011.png}}
+
+https://trapexit.github.io/mergerfs/
+
+Before use... prepare all the disks and mount them somewhere sensible.
+
+{{./pasted_image014.png}}
+
+
+
+
+{{./pasted_image012.png}}
+
+
+{{./pasted_image015.png}}
+
+**/etc/fstab**
+
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/nvme0n1p2 during installation
+UUID=a01769be-6f46-44ca-b378-f12f065f87dd /               ext4    errors=remount-ro 0       1
+# /boot/efi was on /dev/nvme0n1p1 during installation
+UUID=0AFB-6664  /boot/efi       vfat    umask=0077      0       1
+/swapfile                                 none            swap    sw              0       0
+/dev/disk/by-uuid/cfd79963-8e21-4cad-a536-5a5960fe2667 /mnt/fast1 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+/dev/disk/by-uuid/e2017dda-7315-4e68-8e9e-c8e935ea0c61 /mnt/slow1 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+/dev/disk/by-uuid/7321976c-a7c3-4a05-a3df-83f17f8e91f0 /mnt/slow2 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+/dev/disk/by-uuid/e3ae7ed2-2e3b-4571-91d3-da8597d82bdd /mnt/slow3 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+/dev/disk/by-uuid/474a9bf5-dd45-4374-9210-6c460bf53da8 /mnt/slow4 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+/dev/disk/by-uuid/b121fd11-ce48-49ac-90dc-e130df7d6b76 /mnt/slow5 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+
+**For mergerfs, add:**
+
+/mnt/slow* /mnt/storage fuse.mergerfs defaults,nonempty,allow_other,use_ino,cache.files=off,moveonenospc=true,category.create=mfs,dropcacheonclose=true,minfreespace=250G,fsname=mergerfs 0 0
+
+
+
+
+===== Creating the Share =====
+
+Create a subdirectory under [[/mnt/storage]] called 'jellyfin'
+
+{{./pasted_image018.png}}
+
+
+{{./pasted_image016.png}}
+
+NB:  You may be prompted to install samba when sharing.
+
+
+
+
+
+
+
+
