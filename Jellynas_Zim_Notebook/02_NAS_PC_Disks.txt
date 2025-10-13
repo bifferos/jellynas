@@ -64,14 +64,21 @@ UUID=0AFB-6664  /boot/efi       vfat    umask=0077      0       1
 
 ===== Creating the Share =====
 
-Create a subdirectory under [[/mnt/storage]] called 'jellyfin'
+Create a subdirectory under [[/mnt/storage]] called 'jellyfin'.  
+Create the various Jellyfin folders you need in there.
 
-{{./pasted_image018.png}}
+''$ ls -l /mnt/storage/jellyfin/''
+''drwxrwxr-x 23 nobody nogroup 4096 Jun 28 15:48 Movies''
+''drwxrwxr-x 24 nobody nogroup 4096 Aug 17 20:02 Shows''
+
+Note the user and groups of these files
+
+Setup [[/etc/exports]] to export the share.  This assumes a very secure network.  This allows writes for convenient updates, use ro instead of rw if 
+
+''$ cat /etc/exports''
+''/mnt/storage/jellyfin *(rw,sync,all_squash,anonuid=65534,anongid=65534,no_subtree_check,fsid=101)''
 
 
-{{./pasted_image016.png}}
-
-NB:  You may be prompted to install samba when sharing.
 
 
 

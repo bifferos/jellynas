@@ -5,7 +5,7 @@ Creation-Date: 2025-03-02T12:46:16+00:00
 ====== 01 Intro ======
 Created Sunday 02 March 2025
 
-===== Existing Setup =====
+===== Old Setup =====
 
 
 {{./pasted_image002.tiff}}
@@ -40,7 +40,7 @@ Ryzen 1700, 16GB RAM, ASRock 450 M/b and a Fractal Design R4 case   <--- overkil
 
 
 
-===== Proposed Setup =====
+===== New Setup =====
 
 
 {{./pasted_image003.tiff}}

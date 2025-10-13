@@ -16,7 +16,7 @@ Select WOL.
 
 {{./pasted_image008.png}}
 
-Does the 'ethtool' stuff.
+Does the 'ethtool' stuff, no need for ethtool.
 
 Note the MAC address:
 
@@ -29,80 +29,128 @@ Note the MAC address:
 
 ==== On Jellyfin server: ====
 
-{{./pasted_image004.png}}
+$ apt install autofs
 
-{{./pasted_image005.png}}
+Change auto.master to manage a single program mount point
 
+# cat auto.master
+/mnt /usr/local/sbin/auto.jellyfin --timeout=300 --ghost
 
-Find the location of the log files:
+[[/usr/local/sbin/auto.jellyfin]] does the waking up, when something enters the [[/mnt/jellyfin]] directory.
 
-root@jm-Standard-PC-i440FX-PIIX-1996:**/var/log/jellyfin**# ls -l *.log
--rw-r--r-- 1 jellyfin jellyfin  48689 Mar  1 10:55 FFmpeg.DirectStream-2025-03-01_10-55-24_3c18006b17a5f27264ff725c8a514714_0cf6f68d.log
--rw-r--r-- 1 jellyfin jellyfin 152553 Mar  1 14:52 FFmpeg.Transcode-2025-03-01_14-47-56_a58b3bfb6c844df90c38501e1fd733ae_3676c17b.log
--rw-r--r-- 1 jellyfin jellyfin  13079 Feb 27 23:25 jellyfin20250227.log
--rw-r--r-- 1 jellyfin jellyfin 212751 Feb 28 20:30 jellyfin20250228.log
--rw-r--r-- 1 jellyfin jellyfin 268697 Mar  1 20:01 jellyfin20250301.log
-
-find / -iname jellyfin\*.log
+This script is the most complicated part, probably because I've wanted it in dependency-free python.  When there is file access inside [[/mnt]] the script is run to display the mount options for the mount command.  The NAS is woken up, and there is a wait until it's awake (responding to NFS requests on port 2049).
 
 
-There may be background processes generated logs, no use if you're sleeping right next to the NAS and you want it to stay off.
-{{./pasted_image009.png}}
+''#!/usr/bin/env python3''
+''import os''
+''import sys''
+''import socket''
+''import re''
 
-inotifywait 
-
-root@jm-Standard-PC-i440FX-PIIX-1996:~# **inotifywait /var/log/jellyfin -e create -e modify**
-Setting up watches.
-Watches established.
-
-
-
-**jellywake.sh**
-
-''!/bin/sh''
-
-''inotifywait /var/log/jellyfin -e create -e modify''
-''if [ $? -eq 0 ]; then''
-  ''for i in 1 2; do''
-	''wakeonlan a8:a1:59:2b:6a:9d''
-	''sleep 5''
-  ''done''
-  ''sleep 30     # Less than the autosuspend idle interval''
-''else''
-  ''echo "Error running inotifywait, is it installed?"''
-  ''break''
-''fi''
+''# Remote NFS export and options''
+''REMOTE_MAC = "a8:a1:59:2b:6a:9d"''
+''REMOTE_HOST = "172.16.16.13"''
+''REMOTE = f"{REMOTE_HOST}:/mnt/storage/jellyfin"''
+''OPTIONS = "-fstype=nfs4,rw,vers=4.2,rsize=1048576,wsize=1048576,proto=tcp,hard"''
 
 
-**jellywake.service  (systemctl config file)**
-
-[Unit]
-Description=NAS Wakeup script
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/jellywake.sh
-StandardOutput=journal
-StandardError=journal
-Restart=on-success
-User=jellyfin
-Group=jellyfin
-
-[Install]
-WantedBy=multi-user.target
+''def send_wol(mac, broadcast="255.255.255.255", port=9):''
+	''mac_clean = re.sub(r'[^0-9A-Fa-f]', '', mac)''
+	''if len(mac_clean) != 12:''
+		''raise ValueError("Bad MAC")''
+	''magic = b'\xff' * 6 + bytes.fromhex(mac_clean) * 16''
+	''with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:''
+		''s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)''
+		''s.sendto(magic, (broadcast, port))''
 
 
-**install.sh**
-
-#!/bin/sh
-
-sudo cp jellywake.sh /usr/local/bin/jellywake.sh
-sudo cp jellywake.service /etc/systemd/system/jellywake.service
-sudo systemctl daemon-reload
-sudo systemctl enable jellywake
-sudo systemctl start jellywake
+''def is_nfs_port_open(host, port=2049, timeout=1.0):''
+	''try:''
+		''with socket.create_connection((host, port), timeout=timeout):''
+			''return True''
+	''except OSError:''
+		''return False''
 
 
+''def wake_host():''
+	''send_wol(REMOTE_MAC)''
+	''for count in range(1,15):''
+		''if is_nfs_port_open(REMOTE_HOST):''
+			''sys.stderr.write(f"Woke after {count} seconds")''
+			''return True''
+		''send_wol(REMOTE_MAC)''
+	''sys.stderr.write("Failed to wake host\n")''
+	''return False''
+    
+
+''def main():''
+	''# No args: list available keys (for --ghost / enumeration)''
+	''if len(sys.argv) == 1:''
+		''print("jellyfin")''
+		''return 0''
+
+	''key = sys.argv[1]''
+	''if key != "jellyfin":''
+		''# Unknown key -> autofs should fail this lookup''
+		''return 1''
+        
+	''if wake_host():''
+		''print(f"{OPTIONS} {REMOTE}")''
+		''return 0''
+        
+	''return 1''
+
+
+''if'' __''name''__ ''== "''__''main''__''":''
+	''sys.exit(main())''
+
+
+It is convenient (but non-trivial) to re-export this share over Samba for adding files.  Care must be taken to ensure we play nice with the autofs mount.
+The script allows anyone to write files onto the media server NAS, so uploading is straightforward.
+Attempts to access the share cause the execution of an ls on [[/mnt/jellyfin,]] which triggers the autofs mount if it's been idle too long and has been unmounted.
+If this isn't done Samba can end up caching the state of the directory and you never see your files once the NAS suspends.
+
+/etc/samba/smb.conf
+''[global]''
+   ''workgroup = WORKGROUP''
+   ''server string = Media Library''
+   ''security = user''
+   ''map to guest = Bad User''
+   ''guest account = nobody''
+   ''disable spoolss = yes''
+   ''load printers = no''
+   ''printing = bsd''
+   ''printcap name = /dev/null''
+   ''log file = /var/log/samba/log.%m''
+   ''max log size = 100''
+   ''# Optional: widen compatibility''
+   ''unix extensions = no''
+   ''wide links = yes''
+   ''follow symlinks = yes''
+   ''server min protocol = SMB2''
+   ''server max protocol = SMB3''
+
+''[mnt]''
+   ''path = /mnt''
+   ''browseable = yes''
+   ''writable = yes''
+   ''public = yes''
+   ''guest ok = yes''
+   ''read only = no''
+   ''force user = nobody''
+   ''force group = nogroup''
+   ''create mask = 0777''
+   ''directory mask = 0777''
+   ''inherit permissions = no''
+   ''veto files ='' 
+   ''preexec = /bin/ls /mnt/jellyfin >/dev/null 2>&1''
+
+
+
+
+
+
+==== THE END ====
 
 
 

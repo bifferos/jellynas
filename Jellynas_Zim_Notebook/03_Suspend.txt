@@ -64,182 +64,46 @@ Safe to leave them.
 
 ==== For Jellyfin ====
 
-Sleep when the TV is off is one possibility:
-
-[check.Ping]
-enabled = true
-hosts = <my tv address>
-
-Issue:  Amazon/Netflix/Youtube leaves the NAS on.
-
-Sleep when no SMB traffic would work for Kodi:
-
-# This check is disabled.
-[check.Smb]
-enabled = false
-
-Issue:  Jellyfin doesn't mount shares itself, so it's permanently connected.
 
 
 {{./pasted_image019.png}}
+
+'''
 [check.ExternalCommand]
 enabled = true
-command = [[../JellyNAS/myscript.sh]]
+command = /usr/local/bin/check_nfsd.py
+'''
 
 
-We can check sessions in Jellyfin using the API
+The script ''check_nfsd.py'' checks if there is any NFS activity.  This seems to be working for now:
 
 
-In Jellyfin, under Dashboard:
+''#!/usr/bin/env python3''
+''import shutil''
+''import os''
+''import sys''
+''from pathlib import Path''
 
-{{./pasted_image020.png}}
+''NFS_STATS = Path("/proc/net/rpc/nfsd")''
+''STATE_FILE = Path("/var/run/nfsd_stats.last")''
 
-{{./pasted_image021.png}}
+''IDLE = "idle"''
+''ACTIVE = 0''
 
-e.g. 
+''if not NFS_STATS.exists():''
+	''sys.exit(ACTIVE)''
 
-{{./pasted_image022.png}}
+''if STATE_FILE.exists():''
+	''if NFS_STATS.open().read() == STATE_FILE.open().read():''
+		''sys.exit(IDLE)''
 
-
-a5c8f9564c10458bb1f1ada1ad2958b6
-
-
-http://172.16.16.14:8096/web/#/dashboard/keys
-
-**Curl**
-''curl -s -X GET "''[[http://172.16.16.14:8096/Sessions|''http://172.16.16.14:8096/Sessions'']]''" -H "X-Emby-Token: a5c8f9564c10458bb1f1ada1ad2958b6"''
-
-**Python:  a naive solution**
-''import requests''
-''resp = requests.get("''[[http://172.16.16.14:8096/Sessions|''http://172.16.16.14:8096/Sessions'']]''", headers={"X-Emby-Token": "a5c8f9564c10458bb1f1ada1ad2958b6"})''
-''user_list = resp.json()''
-''if len(user_list):''
-	''sys.exit(0)''
-''else:''
-	''sys.exit(1)''
+''shutil.copyfile(NFS_STATS, STATE_FILE)''
+''sys.exit(ACTIVE)''
 
 
-**''python3''**
-''>>> import requests''
-''>>> from pprint import pprint''
-''>>> resp = requests.get("''[[http://172.16.16.14:8096/Sessions|''http://172.16.16.14:8096/Sessions'']]''", headers={"X-Emby-Token": "a5c8f9564c10458bb1f1ada1ad2958b6"})''
-''>>> pprint(resp.json())''
-''[{'AdditionalUsers': [],''
-  '''ApplicationVersion': '10.10.6',''
-''...''
-  '''IsActive': True,''
-  "__LastActivityDate__": "2025-03-02T22:09:50.4995026Z",''
-''...''
-  '''RemoteEndPoint': '172.16.16.27',''
-''...''
-  '''UserId': '7eed0d239298485dad167d9df41d3a96',''
-  '''UserName': 'guest'}]''
+So every 30 seconds the nfs daemon stats are gathered.  If there is no activity, and nobody is logged in, the NAS will suspend.
 
 
-
-Autosuspend wants:
-* Poll every X seconds
-* From series of poll results, figure out idle time
-
-
-[[LastActivityDate]] provides:
-* Idle time immediately (now - activitydate)
-* No way to tell autosuspend that 'time's up'
-
-So we have to convert the lastActivityDate into a 'check' script by comparing the previous [[LastActivityDate]] with the current one, so we need to keep track.
-
-**[[/usr/local/bin/jellycheck.py]]**
-
-	''#!/usr/bin/env python3''
-	
-	''import sys''
-	''import requests''
-	''from pathlib import Path''
-	''from datetime import datetime, timezone, timedelta''
-	
-	
-	''PREVIOUS_DATE_FILE = Path("/tmp/jellycheck.txt")''
-
-	
-	''def init_previous_date():''
-		''if not PREVIOUS_DATE_FILE.exists():''
-			''date_now = datetime.now(tz=timezone.utc)''
-			''very_old = date_now - timedelta(days=360)''
-	
-			''with PREVIOUS_DATE_FILE.open("w") as fp:''
-				''fp.write(very_old.isoformat())''
-	
-	
-	''def read_previous_date():''
-		''"""Read date stored from the previous execution"""''
-		''with PREVIOUS_DATE_FILE.open("r") as fp:''
-			''return datetime.fromisoformat(fp.read().strip())''
-	
-	
-	''def write_date(lastactive):''
-		''"""Write the newly acquired date"""''
-		''with PREVIOUS_DATE_FILE.open("w") as fp:''
-			''fp.write(lastactive.isoformat())''
-	
-	
-	''def latest_activity(session_list):''
-		''all_dates = []''
-		''for session in session_list:''
-			''iso_str = session["LastActivityDate"]''
-			''iso_date = datetime.fromisoformat(iso_str)''
-			''all_dates.append(iso_date)''
-	        
-		''all_dates.sort()''
-		''return all_dates[-1]''    
-	
-	
-	''def main():''
-		''init_previous_date()''
-	
-		''old_date = read_previous_date()''
-	
-		''try:''
-			''resp = requests.get("http://172.16.16.14:8096/Sessions", headers={"X-Emby-Token": "a5c8f9564c10458bb1f1ada1ad2958b6"})''
-			''resp.raise_for_status()''
-			''session_list = resp.json()''
-		''except Exception as e:''
-			''printf(f"Error making check on sessions {e}")''
-			''sys.exit(0)    # We want to indicate active on any error, because the error is probably suspend in progress, and safer not to sleep for diagnostics''
-	    
-		''if len(session_list) == 0:''
-			''sys.exit("No sessions, inactive")   # no sessions, inactive''
-	
-		''new_date = latest_activity(session_list)''
-		''if new_date == old_date:''
-			''sys.exit("Session, but no new activity")   # session, but no activity since last poll: inactive''
-	
-		''write_date(new_date)''
-	
-	
-	''if __name__ == "__main__":''
-		''main()''
-	
-
-And put it in a section in the conf file:
-**/etc/autosuspend.conf**
-''[check.ExternalCommand]''
-''enabled = true''
-''command = /usr/local/bin/jellycheck.py''
-
-
-(optional) override the autosuspend.conf command with my own for more/different logging.
-**/usr/loca/bin/suspend.sh**
-''#!/bin/sh''
-
-''logger nas_shutdown''
-''/usr/bin/systemctl suspend''
-
-
-
-
-Troubleshooting if systemd refuses to suspend:
-
-{{./pasted_image.png}}
 
 
 
