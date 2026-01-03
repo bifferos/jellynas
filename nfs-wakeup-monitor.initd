@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+# OpenRC init script for NFS wakeup monitor daemon
+
+name="nfs-wakeup-monitor"
+description="NFS Wakeup Monitor - Sends WOL when NFS activity detected"
+command="/usr/local/bin/nfs-wakeup-monitor.sh"
+command_background=yes
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+    need net
+    after networking
+}
+
+start_pre() {
+    if [ ! -x "$command" ]; then
+        eerror "$command is not executable"
+        return 1
+    fi
+    
+    # Check for required commands
+    for cmd in tcpdump ether-wake nc; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            eerror "Required command not found: $cmd"
+            return 1
+        fi
+    done
+    
+    return 0
+}

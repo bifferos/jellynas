@@ -1,0 +1,29 @@
+#!/sbin/openrc-run
+# OpenRC init script for NFS idle suspend daemon
+
+name="nfs-idle-suspend"
+description="NFS Idle Suspend Daemon"
+command="/usr/local/bin/nfs-idle-suspend.sh"
+command_background=yes
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+    need nfs
+    after nfs
+}
+
+start_pre() {
+    if [ ! -f /proc/net/rpc/nfsd ]; then
+        eerror "NFS server is not running"
+        return 1
+    fi
+    
+    if [ ! -x "$command" ]; then
+        eerror "$command is not executable"
+        return 1
+    fi
+    
+    return 0
+}
