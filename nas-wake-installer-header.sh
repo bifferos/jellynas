@@ -1,16 +1,16 @@
 #!/bin/sh
-# NFS Wakeup Monitor - Self-Extracting Installer
+# NAS Wake Monitor - Self-Extracting Installer
 # This installer embeds all required files using here-documents for transparency
 # 
-# Usage: sh nfs-wakeup-installer.sh [--enable]
+# Usage: sh nas-wake-installer.sh [--enable]
 #        --enable: Also enable the service in default runlevel
 
 set -e
 
 # Installation paths
-DAEMON_PATH="/usr/local/bin/nfs-wakeup-monitor.sh"
-INIT_PATH="/etc/init.d/nfs-wakeup-monitor"
-SERVICE_NAME="nfs-wakeup-monitor"
+DAEMON_PATH="/usr/local/bin/nas-wake-monitor.sh"
+INIT_PATH="/etc/init.d/nas-wake-monitor"
+SERVICE_NAME="nas-wake-monitor"
 
 # Colors for output
 RED='\033[0;31m'
@@ -40,7 +40,7 @@ fi
 # Check if already installed
 check_installation() {
     if [ -f "$DAEMON_PATH" ] && [ -f "$INIT_PATH" ]; then
-        info "NFS Wakeup Monitor is already installed"
+        info "NAS Wake Monitor is already installed"
         info "Daemon script: $DAEMON_PATH"
         info "Init script: $INIT_PATH"
         
@@ -63,7 +63,7 @@ check_installation() {
     fi
 }
 
-info "Starting NFS Wakeup Monitor installation..."
+info "Starting NAS Wake Monitor installation..."
 
 # Check if already installed
 check_installation
@@ -85,5 +85,7 @@ for cmd in tcpdump ether-wake nc; do
 done
 
 if [ -n "$MISSING_DEPS" ]; then
-    error "Missing required dependencies:$MISSING_DEPS\nInstall with: apk add tcpdump net-tools netcat-openbsd"
+    printf "${RED}[ERROR]${NC} Missing required dependencies:%s\n" "$MISSING_DEPS"
+    printf "        Install with: apk add tcpdump net-tools netcat-openbsd\n"
+    exit 1
 fi

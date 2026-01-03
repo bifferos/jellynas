@@ -1,9 +1,9 @@
 #!/sbin/openrc-run
-# OpenRC init script for NFS wakeup monitor daemon
+# OpenRC init script for NAS wake monitor daemon
 
-name="nfs-wakeup-monitor"
-description="NFS Wakeup Monitor - Sends WOL when NFS activity detected"
-command="/usr/local/bin/nfs-wakeup-monitor.sh"
+name="nas-wake-monitor"
+description="NAS Wake Monitor - Sends WOL when NAS activity detected"
+command="/usr/local/bin/nas-wake-monitor.sh"
 command_background=yes
 pidfile="/run/${RC_SVCNAME}.pid"
 output_log="/var/log/${RC_SVCNAME}.log"

@@ -27,25 +27,26 @@ log "Starting NFS wakeup monitor for $NAS_HOST ($NAS_MAC) from $LOCAL_MAC on $IN
 
 # Wake sequence function
 wake_nas() {
-    log "Activity detected, initiating wake sequence..."
-    
     # Send WOL and check after each one - NAS might already be awake
     attempts=0
     while true; do
         # Send WOL packet
-        ether-wake "$NAS_MAC" 2>/dev/null || log "WARNING: Failed to send WOL packet"
+        ether-wake "$NAS_MAC" 2>/dev/null
         
         # Check if NAS is responding
         if nc -z -w1 "$NAS_HOST" "$NFS_PORT" 2>/dev/null; then
-            log "NAS is awake and responding on port $NFS_PORT (after $attempts seconds)"
+            # Only log if it took more than 3 seconds (actual wake from suspend)
+            if [ $attempts -gt 3 ]; then
+                log "NAS woken after $attempts seconds"
+            fi
             return 0
         fi
         
         attempts=$((attempts + 1))
         
-        # Log periodically so we know it's trying
-        if [ $((attempts % 10)) -eq 0 ]; then
-            log "Still waiting for NAS response ($attempts attempts so far)..."
+        # Log every 20 seconds so we know if there's a problem
+        if [ $((attempts % 20)) -eq 0 ]; then
+            log "Still waiting for NAS response ($attempts seconds)..."
         fi
         
         sleep 1
@@ -59,7 +60,4 @@ while true; do
     
     # Stop the world and wake NAS
     wake_nas
-    
-    # Resume monitoring immediately (wake sequence already provided delay)
-    log "Resuming monitoring..."
 done

@@ -5,10 +5,18 @@ SUSPEND_INSTALLER = nfs-idle-suspend-installer.sh
 SUSPEND_DAEMON = nfs-idle-suspend.sh
 SUSPEND_INIT = nfs-idle-suspend.initd
 
-# NFS Wakeup Monitor (for NFS client)
-WAKEUP_INSTALLER = nfs-wakeup-installer.sh
-WAKEUP_DAEMON = nfs-wakeup-monitor.sh
-WASUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) installer-header.sh installer-footer.sh Makefile
+# NAS Wake Monitor (for NFS client)
+WAKEUP_INSTALLER = nas-wake-installer.sh
+WAKEUP_DAEMON = nas-wake-monitor.sh
+WAKEUP_INIT = nas-wake-monitor.initd
+
+all: $(SUSPEND_INSTALLER) $(WAKEUP_INSTALLER)
+
+suspend-installer: $(SUSPEND_INSTALLER)
+
+wakeup-installer: $(WAKEUP_INSTALLER)
+
+$(SUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) installer-header.sh installer-footer.sh Makefile
 	@echo "Generating NFS idle suspend installer..."
 	@cat installer-header.sh > $(SUSPEND_INSTALLER)
 	@echo "" >> $(SUSPEND_INSTALLER)
@@ -31,9 +39,9 @@ WASUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) installer-header.sh inst
 	@echo "Suspend installer created: $(SUSPEND_INSTALLER)"
 	@echo "Size: $$(wc -c < $(SUSPEND_INSTALLER)) bytes"
 
-$(WAKEUP_INSTALLER): $(WAKEUP_DAEMON) $(WAKEUP_INIT) wakeup-installer-header.sh wakeup-installer-footer.sh Makefile
-	@echo "Generating NFS wakeup monitor installer..."
-	@cat wakeup-installer-header.sh > $(WAKEUP_INSTALLER)
+$(WAKEUP_INSTALLER): $(WAKEUP_DAEMON) $(WAKEUP_INIT) nas-wake-installer-header.sh nas-wake-installer-footer.sh Makefile
+	@echo "Generating NAS wake monitor installer..."
+	@cat nas-wake-installer-header.sh > $(WAKEUP_INSTALLER)
 	@echo "" >> $(WAKEUP_INSTALLER)
 	@echo "# Embedded daemon script" >> $(WAKEUP_INSTALLER)
 	@echo "extract_daemon_script() {" >> $(WAKEUP_INSTALLER)
@@ -49,18 +57,10 @@ $(WAKEUP_INSTALLER): $(WAKEUP_DAEMON) $(WAKEUP_INIT) wakeup-installer-header.sh 
 	@echo "INIT_SCRIPT_EOF" >> $(WAKEUP_INSTALLER)
 	@echo "}" >> $(WAKEUP_INSTALLER)
 	@echo "" >> $(WAKEUP_INSTALLER)
-	@cat wakeup-installer-footer.sh >> $(WAKEUP_INSTALLER)
+	@cat nas-wake-installer-footer.sh >> $(WAKEUP_INSTALLER)
 	@chmod +x $(WAKEUP_INSTALLER)
 	@echo "Wakeup installer created: $(WAKEUP_INSTALLER)"
 	@echo "Size: $$(wc -c < $(WAKEUP_INSTALLER)) bytes"
 
 clean:
-	rm -f $(SUSPEND_INSTALLER) $(WAKEUP_" >> $(INSTALLER)
-	@echo "" >> $(INSTALLER)
-	@cat installer-footer.sh >> $(INSTALLER)
-	@chmod +x $(INSTALLER)
-	@echo "Installer created: $(INSTALLER)"
-	@echo "Size: $$(wc -c < $(INSTALLER)) bytes"
-
-clean:
-	rm -f $(INSTALLER)
+	rm -f $(SUSPEND_INSTALLER) $(WAKEUP_INSTALLER)

@@ -1,4 +1,4 @@
-# Low-Power Jellyfin NAS with Alpine Linux
+# Low-Power NAS with Alpine Linux (For Jellyfin)
 
 A complete guide to building an energy-efficient NAS for Jellyfin using Alpine Linux with automatic suspend/wake functionality.
 
@@ -317,7 +317,9 @@ thirstynas:/jellyfin /mnt/thirstynas nfs4 rw,vers=4.2,rsize=1048576,wsize=104857
 - `retrans=15` - Retry 15 times at 1s before exponential backoff begins
 - `rsize/wsize` - Large buffer sizes for better performance
 
-**Note:** These aggressive timeout values are optimized for the automatic wake-on-access setup described later. See [Automatic Wake on Access](#automatic-wake-on-access) for details.
+**Note:** These timeout values (timeo, retrans) are optimized for the automatic wake-on-access setup described later. See [Automatic Wake on Access](#automatic-wake-on-access) for details.  Nothing I'm describing here stops the NAS from sleeping during playback, it's dependent on the underlying
+NFS requests.  To reduce any wake delays as much as possible you may need to experiment with these values, but I'm certain the defaults will not 
+give a good experience.
 
 Mount it:
 ```bash
@@ -410,15 +412,15 @@ apk add tcpdump net-tools netcat-openbsd
 
 ```bash
 # Transfer the installer to your Jellyfin server
-sh nfs-wakeup-installer.sh
+sh nas-wake-installer.sh
 ```
 
 ### Configure
 
-Edit `/usr/local/bin/nfs-wakeup-monitor.sh`:
+Edit `/usr/local/bin/nas-wake-monitor.sh`:
 
 ```bash
-vi /usr/local/bin/nfs-wakeup-monitor.sh
+vi /usr/local/bin/nas-wake-monitor.sh
 ```
 
 Set these values:
@@ -441,8 +443,8 @@ ip link show eth0
 ### Enable and Start
 
 ```bash
-rc-update add nfs-wakeup-monitor default
-rc-service nfs-wakeup-monitor start
+rc-update add nas-wake-monitor default
+rc-service nas-wake-monitor start
 ```
 
 ### How It Works
@@ -482,7 +484,7 @@ This approach eliminates mount/unmount state issues and handles edge cases like 
    ls /mnt/thirstynas
    
    # Should see wakeup logs:
-   tail -f /var/log/messages | grep nfs-wakeup
+   tail -f /var/log/messages | grep nas-wake
    
    # NAS should wake and respond within ~10-20 seconds
    ```
@@ -502,7 +504,7 @@ rc-service nfs-idle-suspend status
 
 On Jellyfin client:
 ```bash
-rc-service nfs-wakeup-monitor status
+rc-service nas-wake-monitor status
 mount | grep nfs
 ```
 
@@ -542,7 +544,7 @@ ether-wake AA:BB:CC:DD:EE:FF
 
 **Check wakeup monitor logs:**
 ```bash
-tail -f /var/log/messages | grep nfs-wakeup-monitor
+tail -f /var/log/messages | grep nas-wake-monitor
 ```
 
 **Verify packet filter is working:**
@@ -557,7 +559,7 @@ tcpdump -i eth0 -c 5 "dst host thirstynas"
 
 **Check wakeup monitor is running:**
 ```bash
-rc-service nfs-wakeup-monitor status
+rc-service nas-wake-monitor status
 ```
 
 **Force unmount if needed:**
@@ -604,18 +606,14 @@ mount | grep mergerfs
 ## Power Savings
 
 Typical power consumption:
-- **Idle (awake):** 30-50W
-- **Suspended:** 2-5W
-- **Potential savings:** ~200-400 kWh/year (~$20-50/year)
+- **Idle (awake):** 40-60W
+- **Suspended:** 1-2W (R5 AM4 system, 5 HDDs)
+- **Potential savings:** (~£100/year)
 
 Suspend effectiveness depends on your usage pattern. Best results with occasional media access rather than continuous streaming.
 
 ---
 
-## Repository
-
-Complete source code and installers available at:
-[Your GitHub repository URL]
 
 ### Building Installers
 
@@ -625,7 +623,7 @@ make
 
 Generates:
 - `nfs-idle-suspend-installer.sh` (for NAS)
-- `nfs-wakeup-installer.sh` (for Jellyfin client)
+- `nas-wake-installer.sh` (for Jellyfin client)
 
 ---
 
@@ -637,7 +635,7 @@ MIT License - See LICENSE file
 
 ## Credits
 
-Created for the Jellyfin community to help reduce power costs while maintaining 24/7 media availability.
+Thanks to the Jellyfin community for this amazing bit of software.
 
 ---
 
