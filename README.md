@@ -1,4 +1,4 @@
-# Low-Power Jellyfin NAS with Alpine Linux
+# Low-Power NAS with Alpine Linux (For Jellyfin)
 
 A complete guide to building an energy-efficient NAS for Jellyfin using Alpine Linux with automatic suspend/wake functionality.
 
