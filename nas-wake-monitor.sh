@@ -1,63 +1,98 @@
 #!/bin/sh
-# NFS Wakeup Monitor
-# Monitors outgoing traffic to NAS and sends WOL when activity detected
+# NAS Wake Monitor
+# Monitors bidirectional NAS traffic to send WOL only when needed
 
 # Configuration - EDIT THESE VALUES
 NAS_HOST="thirstynas"           # DNS name or IP of NAS
 NAS_MAC="AA:BB:CC:DD:EE:FF"     # MAC address of NAS for WOL
-LOCAL_MAC="11:22:33:44:55:66"   # MAC address of this client (get with: ip link or ifconfig)
 INTERFACE="eth0"                # Network interface to monitor (eth0, enp0s3, etc.)
-NFS_PORT=2049                   # NFSv4 port
-WAKE_TIMEOUT=30                 # Seconds to wait for NAS to wake
+ACTIVITY_FILE="/tmp/nas-activity"  # Timestamp file for NAS heartbeat
+ACTIVITY_THRESHOLD=2            # Seconds - skip wake if NAS responded recently
 
 # Log function
 log() {
-    logger -t nfs-wakeup-monitor "$1"
+    logger -t nas-wake-monitor "$1"
 }
 
 # Check for required commands
-for cmd in tcpdump ether-wake nc; do
+for cmd in tcpdump ether-wake; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         log "ERROR: Required command not found: $cmd"
         exit 1
     fi
 done
 
-log "Starting NFS wakeup monitor for $NAS_HOST ($NAS_MAC) from $LOCAL_MAC on $INTERFACE"
+# Auto-detect local MAC address from interface
+LOCAL_MAC=$(cat /sys/class/net/"$INTERFACE"/address 2>/dev/null)
+if [ -z "$LOCAL_MAC" ]; then
+    log "ERROR: Cannot detect MAC address for interface $INTERFACE"
+    exit 1
+fi
 
-# Wake sequence function
-wake_nas() {
-    # Send WOL and check after each one - NAS might already be awake
-    attempts=0
+# Resolve NAS hostname to IP once at startup (avoids DNS lookup every iteration)
+NAS_IP=$(getent hosts "$NAS_HOST" | awk '{print $1}')
+if [ -z "$NAS_IP" ]; then
+    log "ERROR: Cannot resolve $NAS_HOST to IP address"
+    exit 1
+fi
+
+log "Starting NAS wake monitor for $NAS_HOST ($NAS_IP -> $NAS_MAC) from $LOCAL_MAC on $INTERFACE"
+
+# Cleanup function - ensures background monitor stops when service stops
+cleanup() {
+    log "Shutting down..."
+    [ -n "$INCOMING_PID" ] && kill "$INCOMING_PID" 2>/dev/null
+    exit 0
+}
+trap cleanup INT TERM
+
+# Background job: Monitor incoming traffic from NAS
+monitor_incoming() {
+    # Monitor incoming traffic with 0.1s sampling rate
+    INCOMING_FROM_NAS="ether src $NAS_MAC and ether dst $LOCAL_MAC"
     while true; do
-        # Send WOL packet
-        ether-wake "$NAS_MAC" 2>/dev/null
-        
-        # Check if NAS is responding
-        if nc -z -w1 "$NAS_HOST" "$NFS_PORT" 2>/dev/null; then
-            # Only log if it took more than 3 seconds (actual wake from suspend)
-            if [ $attempts -gt 3 ]; then
-                log "NAS woken after $attempts seconds"
-            fi
-            return 0
-        fi
-        
-        attempts=$((attempts + 1))
-        
-        # Log every 20 seconds so we know if there's a problem
-        if [ $((attempts % 20)) -eq 0 ]; then
-            log "Still waiting for NAS response ($attempts seconds)..."
-        fi
-        
-        sleep 1
+        # Wait for single packet, update timestamp, then brief delay
+        tcpdump -i "$INTERFACE" -c 1 -n "$INCOMING_FROM_NAS" >/dev/null 2>&1
+        touch "$ACTIVITY_FILE"
+        sleep 0.1
     done
 }
 
-# Main monitoring loop
+# Start incoming monitor in background
+monitor_incoming &
+INCOMING_PID=$!
+log "Incoming traffic monitor started (PID $INCOMING_PID)"
+
+# Wake sequence function - sends magic packets until timeout
+wake_nas() {
+    log "Sending wake packet to $NAS_MAC"
+    ether-wake -i "$INTERFACE" "$NAS_MAC" 2>/dev/null
+}
+
+# BPF filters for outgoing traffic detection
+OUTGOING_UNICAST="ether dst $NAS_MAC and ether src $LOCAL_MAC"
+OUTGOING_ARP="arp and host $NAS_IP and ether src $LOCAL_MAC"
+
+# Main monitoring loop - watches outgoing traffic
 while true; do
-    # Wait for single packet indicating activity, then stop
-    tcpdump -i "$INTERFACE" -c 1 -n "(dst host $NAS_HOST) or (arp and host $NAS_HOST and ether src $LOCAL_MAC) or (ether dst $NAS_MAC)" >/dev/null 2>&1
+    # Wait for single packet indicating outgoing activity
+    tcpdump -i "$INTERFACE" -c 1 -n "($OUTGOING_UNICAST) or ($OUTGOING_ARP)" >/dev/null 2>&1
     
-    # Stop the world and wake NAS
+    # Check if NAS has responded recently (activity file updated by incoming monitor)
+    if [ -f "$ACTIVITY_FILE" ]; then
+        ACTIVITY_TIME=$(stat -c %Y "$ACTIVITY_FILE" 2>/dev/null || echo 0)
+        CURRENT_TIME=$(date +%s)
+        AGE=$((CURRENT_TIME - ACTIVITY_TIME))
+        
+        if [ "$AGE" -lt "$ACTIVITY_THRESHOLD" ]; then
+            # NAS responded recently - definitely awake, skip magic packet
+            continue
+        fi
+    fi
+    
+    # No recent response from NAS - send magic packet
     wake_nas
+    
+    # Brief delay to avoid packet storm
+    sleep 1
 done

@@ -78,7 +78,7 @@ done
 # Check for runtime dependencies
 info "Checking for required runtime dependencies..."
 MISSING_DEPS=""
-for cmd in tcpdump ether-wake nc; do
+for cmd in tcpdump ether-wake; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         MISSING_DEPS="$MISSING_DEPS $cmd"
     fi
@@ -86,6 +86,6 @@ done
 
 if [ -n "$MISSING_DEPS" ]; then
     printf "${RED}[ERROR]${NC} Missing required dependencies:%s\n" "$MISSING_DEPS"
-    printf "        Install with: apk add tcpdump net-tools netcat-openbsd\n"
+    printf "        Install with: apk add tcpdump net-tools\n"
     exit 1
 fi

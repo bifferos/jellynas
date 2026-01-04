@@ -405,7 +405,7 @@ The solution: Monitor outgoing network traffic to the NAS and send WOL packets w
 ### Install Dependencies
 
 ```bash
-apk add tcpdump net-tools netcat-openbsd
+apk add tcpdump net-tools
 ```
 
 ### Install Wakeup Monitor
@@ -427,16 +427,16 @@ Set these values:
 ```bash
 NAS_HOST="thirstynas"              # Your NAS hostname or IP
 NAS_MAC="AA:BB:CC:DD:EE:FF"        # NAS MAC address
-LOCAL_MAC="11:22:33:44:55:66"      # This client's MAC address
 INTERFACE="eth0"                    # Network interface to monitor
+ACTIVITY_FILE="/tmp/nas-activity"   # Timestamp file for NAS heartbeat
+ACTIVITY_THRESHOLD=2                # Seconds - skip wake if NAS responded recently
 ```
 
-Get MAC addresses:
+**Note:** `LOCAL_MAC` is auto-detected from the network interface. No manual configuration needed.
+
+Get NAS MAC address:
 ```bash
 # On NAS:
-ip link show eth0
-
-# On Jellyfin client:
 ip link show eth0
 ```
 
@@ -449,19 +449,27 @@ rc-service nas-wake-monitor start
 
 ### How It Works
 
-1. **Monitors outgoing traffic** using tcpdump with BPF filter
-2. **Filters for NAS-destined packets:**
-   - IP traffic to NAS
-   - ARP requests for NAS (from this client only)
-   - Direct MAC traffic to NAS
-3. **Wake sequence when activity detected:**
-   - Sends WOL packets repeatedly (1 per second)
-   - Checks NFS port every second for response
-   - Continues sending WOL until NAS responds
-   - Never gives up (matches hard mount behavior)
-4. **Resumes monitoring** after NAS is awake
+The monitor uses a two-process architecture for intelligent wake-on-LAN:
 
-This approach eliminates mount/unmount state issues and handles edge cases like expired ARP caches.
+**Background Process (Incoming Traffic Monitor):**
+- Continuously monitors NAS→client traffic using tcpdump
+- Samples incoming packets every 0.1 seconds
+- Updates `/tmp/nas-activity` timestamp file when packets detected
+- Runs as background job managed by main process
+
+**Main Process (Outgoing Traffic Monitor):**
+- Watches for client→NAS traffic (ARP requests, NFS calls, etc.)
+- Checks activity file timestamp before sending WOL
+- **Sends WOL only if:** NAS hasn't responded in 2+ seconds (configurable)
+- **Skips WOL if:** Recent incoming traffic indicates NAS is awake
+
+**Benefits:**
+- No unnecessary WOL packets when NAS is actively serving files
+- No port polling or connection attempts (lower network/NAS load)
+- Instant detection of NAS activity via passive monitoring
+- Eliminates mount/unmount state issues
+
+During active NFS streaming, the activity file stays fresh (milliseconds old), preventing unnecessary wake attempts. When the NAS suspends, incoming traffic stops, and the next outgoing request triggers a WOL.
 
 ---
 

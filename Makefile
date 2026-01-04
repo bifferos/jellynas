@@ -16,9 +16,9 @@ suspend-installer: $(SUSPEND_INSTALLER)
 
 wakeup-installer: $(WAKEUP_INSTALLER)
 
-$(SUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) installer-header.sh installer-footer.sh Makefile
+$(SUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) nfs-idle-suspend-installer-header.sh nfs-idle-suspend-installer-footer.sh Makefile
 	@echo "Generating NFS idle suspend installer..."
-	@cat installer-header.sh > $(SUSPEND_INSTALLER)
+	@cat nfs-idle-suspend-installer-header.sh > $(SUSPEND_INSTALLER)
 	@echo "" >> $(SUSPEND_INSTALLER)
 	@echo "# Embedded daemon script" >> $(SUSPEND_INSTALLER)
 	@echo "extract_daemon_script() {" >> $(SUSPEND_INSTALLER)
@@ -34,7 +34,7 @@ $(SUSPEND_INSTALLER): $(SUSPEND_DAEMON) $(SUSPEND_INIT) installer-header.sh inst
 	@echo "INIT_SCRIPT_EOF" >> $(SUSPEND_INSTALLER)
 	@echo "}" >> $(SUSPEND_INSTALLER)
 	@echo "" >> $(SUSPEND_INSTALLER)
-	@cat installer-footer.sh >> $(SUSPEND_INSTALLER)
+	@cat nfs-idle-suspend-installer-footer.sh >> $(SUSPEND_INSTALLER)
 	@chmod +x $(SUSPEND_INSTALLER)
 	@echo "Suspend installer created: $(SUSPEND_INSTALLER)"
 	@echo "Size: $$(wc -c < $(SUSPEND_INSTALLER)) bytes"
