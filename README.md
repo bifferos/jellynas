@@ -287,51 +287,72 @@ Configure your Jellyfin server (or any Alpine Linux client) to mount the NFS sha
 
 ### Install NFS Client (Optional)
 
-**Note:** For NFSv4, `nfs-utils` is optional on the client side. The Alpine kernel includes native NFSv4 support and can mount shares directly via `/etc/fstab`. However, `nfs-utils` provides useful tools like `showmount` and `nfsstat` for debugging.
+**Note:** For autofs to work properly, you'll need `nfs-utils` installed for the mount.nfs helper. While Alpine's kernel has native NFSv4 support, autofs relies on the userspace mount helper.
 
-**Downside:** Installing `nfs-utils` pulls in Python as a dependency (~50MB), which may not be desirable on minimal systems.
-
-If you want the utilities:
 ```bash
-apk add nfs-utils
+apk add nfs-utils autofs
 ```
 
-Or skip it and rely on kernel-only NFS support.
+### Configure autofs
 
-### Mount the Share
+autofs automatically mounts NFS shares on access and unmounts after idle timeout. This is **critical** for the suspend/wake system - when unmounted, no traffic goes to the NAS, allowing it to suspend.
 
-Create mount point:
+Create the autofs configuration file `/etc/autofs.conf`:
 ```bash
-mkdir -p /mnt/thirstynas
+[ autofs ]
+master_map_name = /etc/autofs/auto.master
+timeout = 30
+browse_mode = yes
 ```
 
-Add to `/etc/fstab` on your Jellyfin server:
+**Note:** The `timeout = 30` setting is for **testing only** - it unmounts after 30 seconds idle. Once you've verified everything works, increase this to a more practical value like `timeout = 300` (5 minutes) or `timeout = 3600` (1 hour). Most users watch content for extended periods before switching off.
 
+Create `/etc/autofs/auto.master`:
+```bash
+# autofs master map - indirect mount
+# Mounts under /mnt using auto.nfs map file
+/mnt /etc/autofs/auto.nfs --timeout=30
 ```
-thirstynas:/jellyfin /mnt/thirstynas nfs4 rw,vers=4.2,rsize=1048576,wsize=1048576,proto=tcp,hard,timeo=10,retrans=15 0 0
+
+Create `/etc/autofs/auto.nfs`:
+```bash
+# autofs indirect map for NFS share
+# Format: <key> <options> <server>:<remote-path>
+# This creates /mnt/thirstynas when accessed
+thirstynas -rw,vers=4.2,rsize=1048576,wsize=1048576,proto=tcp,hard,timeo=10,retrans=10 thirstynas:/jellyfin
 ```
 
 **Mount options explained:**
 - `hard` - Never give up retrying (critical for Jellyfin)
 - `timeo=10` - Initial timeout 1 second (in deciseconds)
-- `retrans=15` - Retry 15 times at 1s before exponential backoff begins
+- `retrans=10` - Retry 10 times at 1s before exponential backoff begins
 - `rsize/wsize` - Large buffer sizes for better performance
 
-**Note:** These timeout values (timeo, retrans) are optimized for the automatic wake-on-access setup described later. See [Automatic Wake on Access](#automatic-wake-on-access) for details.  Nothing I'm describing here stops the NAS from sleeping during playback, it's dependent on the underlying
-NFS requests.  To reduce any wake delays as much as possible you may need to experiment with these values, but I'm certain the defaults will not 
-give a good experience.
+**Note:** When the filesystem is unmounted (after idle timeout), no traffic reaches the NAS, allowing it to suspend. On next access, outgoing traffic triggers the wake monitor.
 
-Mount it:
+Enable and start autofs:
 ```bash
-mount -a
+rc-update add autofs default
+rc-service autofs start
 ```
 
 ### Test Access
 
+Test that autofs mounts on demand:
 ```bash
+# This should automatically mount the share
 ls /mnt/thirstynas
+
+# Create/delete test file
 touch /mnt/thirstynas/test.txt
 rm /mnt/thirstynas/test.txt
+
+# Check mount status
+mount | grep thirstynas
+
+# Wait 30+ seconds, then check again - should be unmounted
+sleep 35
+mount | grep thirstynas
 ```
 
 **Configure Jellyfin:** In Jellyfin's dashboard, add `/mnt/thirstynas` as a media library location.

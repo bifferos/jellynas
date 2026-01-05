@@ -1,0 +1,3 @@
+# autofs master map - indirect mount
+# Mounts under /mnt using auto.nfs map file
+/mnt /etc/autofs/auto.nfs --timeout=30

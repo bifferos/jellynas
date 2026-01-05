@@ -1,0 +1,4 @@
+# autofs indirect map for NFS share
+# Format: <key> <options> <server>:<remote-path>
+# This creates /mnt/thirstynas when accessed
+thirstynas -rw,vers=4.2,rsize=1048576,wsize=1048576,proto=tcp,hard,timeo=10,retrans=10 thirstynas:/jellyfin
